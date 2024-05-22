@@ -9,7 +9,6 @@
 
 '''Script to send RPC commands to a running ElectrumX server.'''
 
-
 import argparse
 import asyncio
 import json
@@ -18,7 +17,6 @@ from os import environ
 
 from aiorpcx import timeout_after, connect_rs
 import electrumx.lib.text as text
-
 
 simple_commands = {
     'getinfo': 'Print a summary of server state',
@@ -76,7 +74,6 @@ other_commands = {
     ),
 }
 
-
 def main():
     '''Send the RPC command to the server and print the result.'''
     main_parser = argparse.ArgumentParser(
@@ -85,6 +82,8 @@ def main():
     )
     main_parser.add_argument('-p', '--port', metavar='port_num', type=int,
                              help='RPC port number')
+    main_parser.add_argument('-H', '--host', metavar='hostname', type=str,
+                             help='RPC host name or IP address')
 
     subparsers = main_parser.add_subparsers(help='sub-command help',
                                             dest='command')
@@ -107,15 +106,18 @@ def main():
     args = main_parser.parse_args()
     args = vars(args)
     port = args.pop('port')
+    host = args.pop('host')
     if port is None:
         port = int(environ.get('RPC_PORT', 8000))
+    if host is None:
+        host = environ.get('RPC_HOST', 'localhost')
     method = args.pop('command')
 
     # aiorpcX makes this so easy...
     async def send_request():
         try:
             async with timeout_after(30):
-                async with connect_rs('localhost', port) as session:
+                async with connect_rs(host, port) as session:
                     session.transport._framer.max_size = 0
                     result = await session.send_request(method, args)
                     if method in ('query', ):
@@ -129,8 +131,8 @@ def main():
                         print(json.dumps(result, indent=4, sort_keys=True))
             return 0
         except OSError:
-            print('cannot connect - is ElectrumX catching up, not running, or '
-                  f'is {port} the wrong RPC port?')
+            print(f'cannot connect - is ElectrumX catching up, not running, or '
+                  f'is {host}:{port} the wrong RPC address?')
             return 1
         except Exception as e:
             print(f'error making request: {e}')
@@ -138,7 +140,6 @@ def main():
 
     code = asyncio.run(send_request())
     sys.exit(code)
-
 
 if __name__ == '__main__':
     main()
